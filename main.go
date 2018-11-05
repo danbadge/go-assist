@@ -1,31 +1,66 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
-	"encoding/json"
+	"os"
+	"time"
 )
 
 // our main function
 func main() {
-	router := mux.NewRouter()
-	log.Print("Listening on port 8080")
-	router.HandleFunc("/people", GetPeople).Methods("GET")
-	log.Fatal(http.ListenAndServe(":8080", router))
+	var port = os.Getenv("PORT")
+
+	var router = mux.NewRouter()
+	log.Printf("Listening on port %s", port)
+	router.HandleFunc("/league/squads", GetLeagueSquadBreakdowns).Methods("GET")
+
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), router))
 }
 
-
-func GetPeople(w http.ResponseWriter, r *http.Request) {
-	people = append(people, Person{ID: "1", Firstname: "John", Lastname: "Doe"}	)
-
-	json.NewEncoder(w).Encode(people)
+func GetLeagueSquadBreakdowns(w http.ResponseWriter, r *http.Request) {
+	var ffApiUri = "https://fantasy.premierleague.com/drf"
+	var leagueId = 592906
+	var url = fmt.Sprintf("%s/leagues-classic-standings/%d?phase=1", ffApiUri, leagueId)
+	league := &League{}
+	getJson(url, league)
+	json.NewEncoder(w).Encode(league)
 }
 
-type Person struct {
-    ID        string   `json:"id,omitempty"`
-    Firstname string   `json:"firstname,omitempty"`
-    Lastname  string   `json:"lastname,omitempty"`
+func getJson(url string, target interface{}) error {
+	var netClient = &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	request, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	request.Header.Set("User-Agent", "Mozilla/5.0")
+	response, err := netClient.Do(request)
+	if err != nil {
+		return err
+	}
+
+    defer response.Body.Close()
+
+    return json.NewDecoder(response.Body).Decode(target)
 }
 
-var people []Person
+type League struct {
+	Table Table `json:"standings"`
+}
+
+type Table struct {
+	Team []Team `json:"results"`
+}
+
+type Team struct {
+	Id         int `json:"entry"`
+	Rank       int `json:"rank"`
+	PlayerName string `json:"player_name"`
+}

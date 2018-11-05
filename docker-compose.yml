@@ -4,6 +4,8 @@ services:
     build: .
     command: 'sh -c "while sleep 1; do :; done"'
     ports:
-      - 8080:8080
+      - 4001:4001
+    environment:
+      - PORT=4001
     volumes:
       - .:/go/src/app
