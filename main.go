@@ -11,7 +11,6 @@ import (
 	"sort"
 )
 
-// our main function
 func main() {
 	var port = os.Getenv("PORT")
 
@@ -23,22 +22,31 @@ func main() {
 }
 
 func GetLeagueSquadBreakdowns(w http.ResponseWriter, r *http.Request) {
-	var leagueId = 592906
-	league := &League{}
+	apiClient := NewApiClient()
 
-	var staticData = getStaticFFData()
-	getJson(fmt.Sprintf("%s/leagues-classic-standings/%d?phase=1", ffApiUri, leagueId), league)
+	var leagueId = 592906
+	var gameweek = 11
+
+	gameData, err := apiClient.GetStaticGameData()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	teams, err := apiClient.GetLeagueStandings(leagueId)
+	if err != nil {
+		panic(err.Error())
+	}
 
 	breakdown := &Breakdown{}
-	for i, team := range league.Table.Teams {
-		getJson(fmt.Sprintf("%s/entry/%d/event/11/picks", ffApiUri, team.Id), &league.Table.Teams[i].Squad)
+	for i, team := range teams {
+		getJson(fmt.Sprintf("%s/entry/%d/event/%d/picks", ffApiUri, team.Id, gameweek), &teams[i].Squad)
 		
-		for j, squadPlayer := range league.Table.Teams[i].Squad.Players {
-			for _, player := range staticData.Players {
+		for j, squadPlayer := range teams[i].Squad.Players {
+			for _, player := range gameData.Players {
 				if squadPlayer.Id == player.Id {
 					var name = fmt.Sprintf("%s %s", player.FirstName, player.LastName)
 					squadPlayer.Name = name
-					league.Table.Teams[i].Squad.Players[j].Name = name
+					teams[i].Squad.Players[j].Name = name
 					break
 				}
 			}
@@ -76,15 +84,6 @@ func GetLeagueSquadBreakdowns(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(breakdown)
 }
 
-func getStaticFFData() *StaticData {
-	staticData := &StaticData{}
-	err := getJson(fmt.Sprintf("%s/bootstrap-static", ffApiUri), staticData)
-	if err != nil {
-		panic(err.Error())
-	}
-	return staticData
-}
-
 func getJson(url string, target interface{}) error {
 	var netClient = &http.Client{
 		Timeout: time.Second * 10,
@@ -107,39 +106,6 @@ func getJson(url string, target interface{}) error {
 }
 
 var ffApiUri = "https://fantasy.premierleague.com/drf"
-
-type League struct {
-	Table Table `json:"standings"`
-}
-
-type Table struct {
-	Teams []Team `json:"results"`
-}
-
-type Team struct {
-	Id         int `json:"entry"`
-	Rank       int `json:"rank"`
-	PlayerName string `json:"player_name"`
-	Squad 	   Squad
-}
-
-type Squad struct {
-	Players []Player `json:"picks"`
-}
-
-type Player struct {
-	Id 		 int `json:"element"`
-	Position int `json:"position"`
-	Name 	 string 
-}
-
-type StaticData struct {
-	Players []struct {
-		Id 		  int `json:"id"`
-		FirstName string `json:"first_name"`
-		LastName  string `json:"second_name"`
-	} `json:"elements"`
-}
 
 type Breakdown struct {
 	Players []PlayerBreakdown `json:"players"`
