@@ -1,0 +1,48 @@
+# Golang CircleCI 2.0 configuration file
+version: 2
+jobs:
+  test:
+    docker:
+      - image: circleci/golang:1.10
+      
+    working_directory: /go/src/github.com/{{ORG_NAME}}/{{REPO_NAME}}
+    steps:
+      - checkout
+      - run: go get github.com/golang/dep/cmd/dep
+      - run: dep ensure
+      - run: go test -v ./...
+  p1:
+    docker:
+      - image: alpine:latest
+    steps:
+      - run: ls -la
+
+  p2:
+    docker:
+      - image: alpine:latest
+    steps:
+      - run: echo "Something happening"
+
+  deploy-to-prod:
+    docker:
+      - image: alpine:latest
+    steps:
+      - run: echo "Deploying"
+
+
+
+workflows:
+  version: 2
+  build-and-deploy:
+    jobs:
+    - test
+    - p1:
+        requires:
+        - test
+    - p2:
+        requires:
+        - test
+    - deploy-to-prod:
+        requires:
+        - p1
+        - p2
