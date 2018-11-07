@@ -1,0 +1,25 @@
+steps:
+  - label: ':hammer: Test'
+    plugins:
+      docker-compose#v2.5.1:
+        run: test
+        config: docker-compose.ci.yml
+    command: ''
+
+  - wait
+
+  - label: ':dog: Parallel 1'
+    command: 
+      - ls -la
+      - echo "Hello"
+  
+  - label: ':cat: Parallel 2'
+    command: echo "Hello"
+
+  - wait
+
+  - label: ':rocket: Deploy to Production'
+    command: echo "Deployingggg"
+    retry:
+      manual:
+        permit_on_passed: true
