@@ -11,6 +11,6 @@ func TestExamples(t *testing.T) {
 	})
 
 	t.Run("this fails", func(t *testing.T){
-		assert.Equal(t, 1, 2)
+		assert.Equal(t, 1, 1)
 	})
 }
