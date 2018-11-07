@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 	"sort"
 )
 
@@ -38,15 +37,17 @@ func GetLeagueSquadBreakdowns(w http.ResponseWriter, r *http.Request) {
 	}
 
 	breakdown := &Breakdown{}
-	for i, team := range teams {
-		getJson(fmt.Sprintf("%s/entry/%d/event/%d/picks", ffApiUri, team.Id, gameweek), &teams[i].Squad)
+	for _, team := range teams {
+		squad, err := apiClient.GetTeamSquad(team.Id, gameweek)
+		if err != nil {
+			panic(err.Error())
+		}
 		
-		for j, squadPlayer := range teams[i].Squad.Players {
+		for _, squadPlayer := range squad.Players {
 			for _, player := range gameData.Players {
 				if squadPlayer.Id == player.Id {
 					var name = fmt.Sprintf("%s %s", player.FirstName, player.LastName)
 					squadPlayer.Name = name
-					teams[i].Squad.Players[j].Name = name
 					break
 				}
 			}
@@ -83,29 +84,6 @@ func GetLeagueSquadBreakdowns(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(breakdown)
 }
-
-func getJson(url string, target interface{}) error {
-	var netClient = &http.Client{
-		Timeout: time.Second * 10,
-	}
-
-	request, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	request.Header.Set("User-Agent", "Mozilla/5.0")
-	response, err := netClient.Do(request)
-	if err != nil {
-		return err
-	}
-
-    defer response.Body.Close()
-
-    return json.NewDecoder(response.Body).Decode(target)
-}
-
-var ffApiUri = "https://fantasy.premierleague.com/drf"
 
 type Breakdown struct {
 	Players []PlayerBreakdown `json:"players"`

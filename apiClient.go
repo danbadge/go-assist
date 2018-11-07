@@ -40,6 +40,18 @@ func (apiClient *ApiClient) GetLeagueStandings(leagueId int) ([]Team, error) {
 	return league.Table.Teams, nil
 }
 
+func (apiClient *ApiClient) GetTeamSquad(teamId int, gameweek int) (*Squad, error) {
+	url := fmt.Sprintf("%s/entry/%d/event/%d/picks", apiClient.BaseUrl, teamId, gameweek)
+	responseBody, err := get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	squad := &Squad{}
+	json.Unmarshal(responseBody, squad)
+	return squad, nil
+}
+
 func get(url string) ([]byte, error) {
 	var httpClient = &http.Client{
 		Timeout: time.Second * 10,
@@ -79,7 +91,6 @@ type Team struct {
 	Id         int `json:"entry"`
 	Rank       int `json:"rank"`
 	PlayerName string `json:"player_name"`
-	Squad 	   Squad
 }
 
 type Squad struct {
