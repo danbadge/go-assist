@@ -15,7 +15,7 @@ func main() {
 
 	var router = mux.NewRouter()
 	log.Printf("Listening on port %s", port)
-	router.HandleFunc("/league/squads", GetLeagueSquadBreakdowns).Methods("GET")
+	router.HandleFunc("/", GetLeagueSquadBreakdowns).Methods("GET")
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), router))
 }
@@ -31,12 +31,14 @@ func GetLeagueSquadBreakdowns(w http.ResponseWriter, r *http.Request) {
 		panic(err.Error())
 	}
 
+	gameDataService := GameDataService{GameData: gameData}
+
 	teams, err := apiClient.GetLeagueStandings(leagueId)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	breakdown := &Breakdown{}
+	var players []PlayerBreakdown
 	for _, team := range teams {
 		squad, err := apiClient.GetTeamSquad(team.Id, gameweek)
 		if err != nil {
@@ -44,45 +46,67 @@ func GetLeagueSquadBreakdowns(w http.ResponseWriter, r *http.Request) {
 		}
 		
 		for _, squadPlayer := range squad.Players {
-			for _, player := range gameData.Players {
-				if squadPlayer.Id == player.Id {
-					var name = fmt.Sprintf("%s %s", player.FirstName, player.LastName)
-					squadPlayer.Name = name
-					break
-				}
-			}
+			squadPlayer.Name = gameDataService.GetPlayerName(squadPlayer.Id)
 
-			playerExists := false
-			for k, player := range breakdown.Players {
-				if player.Id == squadPlayer.Id {
-					playerExists = true
-					breakdown.Players[k].TotalPick += 1
-					if (team.Rank < 6) { breakdown.Players[k].Top5Pick += 1 }
-					if (team.Rank < 11) { breakdown.Players[k].Top10Pick += 1 }
-					break
-				}	
-			}
+			player := findExistingPlayer(players, squadPlayer.Id)
 
-			if !playerExists {
-				var playerBreakdown = PlayerBreakdown{
+			if player == nil {
+				newPlayer := PlayerBreakdown{
 					Id: squadPlayer.Id,
 					Name: squadPlayer.Name,
-					TotalPick: 1,	
-				}			
+					Picks: incrementPicks(Picks{}, team.Rank),
+				}
 
-				if (team.Rank < 6) { playerBreakdown.Top5Pick += 1 }
-				if (team.Rank < 11) { playerBreakdown.Top10Pick += 1 }
-
-				breakdown.Players = append(breakdown.Players, playerBreakdown)
+				players = append(players, newPlayer)
+			} else {
+				player.Picks = incrementPicks(player.Picks, team.Rank)
 			}
 		}
 	}
 
-	sort.Slice(breakdown.Players, func(i, j int) bool {
-		return breakdown.Players[i].Top10Pick > breakdown.Players[j].Top10Pick
+	sort.Slice(players, func(i, j int) bool {
+		return players[i].Picks.Total > players[j].Picks.Total
 	})
 
-	json.NewEncoder(w).Encode(breakdown)
+	json.NewEncoder(w).Encode(Breakdown{Players: players})
+}
+
+type GameDataService struct {
+	GameData *GameData
+}
+
+func (gameDataService *GameDataService) GetPlayerName(playerId int) string {
+	for _, player := range gameDataService.GameData.Players {
+		if playerId == player.Id {
+			var name = fmt.Sprintf("%s %s", player.FirstName, player.LastName)
+			return name
+		}
+	}
+	return ""
+}
+
+func findExistingPlayer(players []PlayerBreakdown, id int) *PlayerBreakdown {
+	for i, existingPlayer := range players {
+		if existingPlayer.Id == id {
+			return &players[i]
+		}
+	}
+	return nil
+}
+
+func incrementPicks(picks Picks, teamRank int) Picks {
+	return Picks{
+		Top5: incrementIf(picks.Top5, teamRank < 6),
+		Top10: incrementIf(picks.Top10, teamRank < 11),
+		Total: picks.Total + 1,
+	}
+}
+
+func incrementIf(current int, predicate bool) int {
+	if (predicate) {
+		return current + 1
+	} 
+	return current
 }
 
 type Breakdown struct {
@@ -92,7 +116,11 @@ type Breakdown struct {
 type PlayerBreakdown struct {
 	Id	 		int `json:"id"`
 	Name 		string `json:"name"`
-	Top5Pick  int `json:"top_5_pick"`
-	Top10Pick int `json:"top_10_pick"`
-	TotalPick int `json:"total_pick"`
-} 
+	Picks		Picks `json:"picks"`
+}
+
+type Picks struct {
+	Top5  int `json:"top_5_pick"`
+	Top10 int `json:"top_10_pick"`
+	Total int `json:"total_pick"`
+}
